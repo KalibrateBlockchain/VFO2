@@ -1,0 +1,25 @@
+sudo -u ec2-user -i <<'EOF'
+conda activate python3
+conda install pytorch==1.2.0 torchvision==0.4.0 cudatoolkit=10.0 -c pytorch -y
+conda install -c conda-forge librosa -y
+conda install -c conda-forge/label/cf202003 assimulo -y
+pip install progressbar
+pip install cupy-cuda110
+pip install git+https://github.com/detly/gammatone
+pip install cupy-cuda101 pynvrtc git+https://github.com/salesforce/pytorch-qrnn
+pip install pynvrtc==8.0
+pip install noisereduce
+pip install soundfile
+pip install pysptk
+pip install pydub
+pip install lmfit
+pip install numdifftools
+git clone https://github.com/santi-pdp/pase
+cd pase
+pip install .
+cd ..
+git clone https://github.com/goiosunsw/PyPeVoc
+cd PyPeVoc
+pip install .
+cd ..
+EOF
