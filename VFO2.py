@@ -667,12 +667,12 @@ def sys_eigenvals(l,a,b,d):
     return P,r1,i1,r2,i2
 
 
-def vfo_vocal_fold_estimator(glottal_flow,wav_samples,sample_rate,verbose):
+def vfo_vocal_fold_estimator(glottal_flow,wav_samples,sample_rate):
     print("len(glottal_flow),len(wav_samples)",len(glottal_flow),len(wav_samples))
     alpha=0.30
     beta=0.20
     delta=0.50
-    #verbose=1
+    verbose=0
     t_patience = 20
     f_delta=0.0
     cut_off=0.4
@@ -761,7 +761,7 @@ def vfo_vocal_fold_estimator(glottal_flow,wav_samples,sample_rate,verbose):
     
 
     while patience < t_patience: # this was 400 default
-        if verbose==1:
+        if verbose>-1:
           print("")
           print("")
           print("New solution:")
@@ -1166,15 +1166,27 @@ def load_model(path='/home/ec2-user/SageMaker/VFO2/version_1/FE_e199.ckpt'):
     pase = wf_builder('/home/ec2-user/SageMaker/VFO2/version_1/cfg/frontend/PASE+.cfg').eval()
     pase.load_pretrained(path, load_last=True, verbose=True)
     #pase.cuda() #test
+    print("pase.cpu")
     pase.cpu()
+    print("pase2.cpu")
     return pase
 
 
-def CWWmain(path, userName, time_code):
+    #def CWWmain(path, userName, time_code, mode_of_processing):
+def CWWmain(fname, mode_of_processing):
     #mode_of_processing=1 # for console
     #mode_of_processing=2 # for production
     
-    mode_of_processing=0
+    path_in_fname='/home/ec2-user/SageMaker/VFO2/VFO2/sample_store/'
+    lpf=len(path_in_fname)
+    path = fname[:lpf]
+    userName = fname[lpf:lpf+37]
+    time_code=fname[92:104]
+       
+    t_code=datetime.datetime.strptime(time_code[:10],"%y%m%d%H%M")
+    begin_time_range = datetime.datetime.strftime(t_code + datetime.timedelta(seconds=-30),"%y%m%d%H%M")
+    end_time_range = datetime.datetime.strftime(t_code + datetime.timedelta(seconds=120),"%y%m%d%H%M")
+                                           
     audio_type_list = ['vowel-i', 'vowel-a', 'alphabet-a-z', 'count-1-20', 'cough', 'vowel-u', 'VowelA2', 'VowelAh2', 'VowelAb2']
     feature_list=[]
     audio_types=[]
@@ -1187,7 +1199,7 @@ def CWWmain(path, userName, time_code):
     vocal_fold = False
     vocalCNN_prediction = 0
     color='b'
-    version=3.0
+    version=4.0
     
     res = {
         'alpha':float(0),
@@ -1217,161 +1229,163 @@ def CWWmain(path, userName, time_code):
     #time_code='21071001'
     
     directory_list=os.listdir(path+userName)
-    if mode_of_processing==1:
-        print("directory_list: ", directory_list)
-    directory_list = list(filter(lambda file_name: (
-        ((os.path.splitext(file_name)[1] == '.wav') or
-         (os.path.splitext(file_name)[1] == '.3gp') or
-        (os.path.splitext(file_name)[1] == '.caf'))
-        and 
-        (os.path.splitext(file_name)[0].split('_')[1] == time_code)
-        and
-        ((os.path.splitext(file_name)[0].split('_')[0] == 'cough') or
-        (os.path.splitext(file_name)[0].split('_')[0] == 'count-1-20') or
-        (os.path.splitext(file_name)[0].split('_')[0] == 'vowel-u') or
-        (os.path.splitext(file_name)[0].split('_')[0] == 'vowel-i') or
-        (os.path.splitext(file_name)[0].split('_')[0] == 'vowel-a') or
-        (os.path.splitext(file_name)[0].split('_')[0] == 'alphabet-a-z'))      
-        ),directory_list))
-    if mode_of_processing==1:
-        print("directory_list: ", directory_list,time_code )
 
     for file_name in directory_list:
-        audio_type=os.path.splitext(file_name)[0].split('_')[0] 
-        file_type=os.path.splitext(file_name)[1]
-        if mode_of_processing==1:
-            print('audio_type',audio_type,'file_type= ',file_type)
+                                         
+        audio_type='none'
+                                         
+        v=file_name.find('VowelAt')
+        if v > -1:
+            audio_type = 'vowel-i'
+            time_stamp = file_name[v+7:v+17]
         
-        if file_type==".3gp":
-            f3gpname=file_name
-            file_name=os.path.splitext(file_name)[0]+".wav"
-            os.system("ffmpeg -i "+path+f3gpname+" "+path+file_name) #ffmpeg to wav
+        v=file_name.find('Vowelo')
+        if v > -1:
+            audio_type = 'vowel-a'
+            time_stamp = file_name[v+6:v+16]
             
-        if mode_of_processing==1:
-            print("file_name",file_name)
-        r_signal, sr = librosa.load(path+userName+file_name, sr=None, mono=True)
-        signal = r_signal
-        #signal = r_signal / np.linalg.norm(r_signal)
-        selected_signal = signal
-        if mode_of_processing==1:
-            fig, ax = plt.subplots(figsize=(20,3)) #display signal
-            plt.title('Signal raw: '+file_name)
-            ax.plot(selected_signal)
-            plt.show()
-            print(audio_type,len(selected_signal),selected_signal,sr,file_name)
+        v=file_name.find('Vowelu')
+        if v > -1:
+            audio_type = 'vowel-u'
+            time_stamp = file_name[v+6:v+16]
         
-        if audio_type == 'vowel-a' or audio_type == 'vowel-i' or audio_type == 'vowel-u':
-
-            noise_clip = selected_signal[int(sr*.3):int(sr*0.5)]
-            mean_noise = np.mean(np.abs(noise_clip))
-            if mode_of_processing==1:
-                print("mean_noise*10000=",mean_noise*10000)
-            if mean_noise*10000>1200.0: 
-                too_noisy = True
-                
-                
-            if audio_type == 'vowel-i':  
-                
-                no_vowel_i = False
-
-                #trim signal
-                abs_signal = np.abs(selected_signal)
-                chunk = int(sr*.02)
-                avg_signal=[]
-                r_sum=sum(abs_signal[:(chunk-1)])
-                for index, value in enumerate(abs_signal[: len(abs_signal)-chunk]):
-                    r_sum=r_sum+abs_signal[index+chunk]
-                    avg_signal.append(r_sum)
-                    r_sum=r_sum-abs_signal[index]
-        
-                threshold = max(avg_signal)
-                index=0
-                while avg_signal[index] < (threshold*.6):
-                    start_sample = index
-                    index=index+1
-
-                while (avg_signal[index] > (threshold*.2)) and (index<len(avg_signal)-3):
-                    end_sample=index
-                    index=index+1
-
-                trim_start=start_sample+int(sr*.1)
-                trim_end=end_sample-int(sr*.1)
-                selected_signal = selected_signal[trim_start:trim_end]
-                r_signal_i=r_signal
-                if mode_of_processing==1:
-                    fig, ax = plt.subplots(figsize=(20,3))
-                    plt.title('Signal trimmed')
-                    ax.plot(selected_signal)
-                    plt.show()
-
-            slices=[]
-            uttMean = np.mean(np.abs(selected_signal))
-            uttStd = np.std(selected_signal)
-            if mode_of_processing==1:
-                print(uttMean,uttStd,len(selected_signal))
+        v=file_name.find('cough')
+        if v > -1:
+            audio_type = 'cough'
+            time_stamp = file_name[v+5:v+15]
             
-            for sl in range(0, len(selected_signal)-int(sr*1.0), int(sr/10)):
-                slice=[np.mean(np.abs(selected_signal[sl:sl+int(sr*1.0)])),np.std((selected_signal[sl:sl+int(sr*1.0)])),sl]
-                #mSlice=np.mean(np.abs(x[sl:sl+sr]))
-                #sSlice=np.std(np.abs(x[sl:sl+sr]))
-                slices.append(slice)
-                #print("slice sl",slice)
+        v=file_name.find('count')
+        if v > -1:
+            audio_type = 'count-1-20'
+            time_stamp = file_name[v+5:v+15]
+                                                     
+        if ((audio_type != 'none') and
+            (time_stamp >= begin_time_range) and 
+            (time_stamp <= end_time_range) and
+            (
+            (os.path.splitext(file_name)[1] == '.wav') or
+            (os.path.splitext(file_name)[1] == '.3gp') or
+            (os.path.splitext(file_name)[1] == '.mp4') or
+            (os.path.splitext(file_name)[1] == '.caf')
+            )):
+                                         
+            #we have a file_name that meets criteria to process
+
+            file_type=os.path.splitext(file_name)[1]
         
-            sorted_slices=sorted(slices, key=lambda slice: slice[1])
+            if file_type==".3gp":
+                f3gpname=file_name
+                file_name=os.path.splitext(file_name)[0]+".wav"
+                os.system("ffmpeg -i "+path+f3gpname+" "+path+file_name) #ffmpeg to wav
+            
+            r_signal, sr = librosa.load(path+userName+file_name, sr=None, mono=True)
+            signal = r_signal
+            #signal = r_signal / np.linalg.norm(r_signal)
+            selected_signal = signal
+       
+            if audio_type == 'vowel-a' or audio_type == 'vowel-i' or audio_type == 'vowel-u':
+
+                noise_clip = selected_signal[int(sr*.3):int(sr*0.5)]
+                mean_noise = np.mean(np.abs(noise_clip))
+                #print("mean_noise*10000=",mean_noise*10000)
+                if mean_noise*10000>1200.0: 
+                    too_noisy = True
+                
+                
+                if audio_type == 'vowel-i':  
+                
+                    no_vowel_i = False
+
+                    #trim signal
+                    abs_signal = np.abs(selected_signal)
+                    chunk = int(sr*.02)
+                    avg_signal=[]
+                    r_sum=sum(abs_signal[:(chunk-1)])
+                    for index, value in enumerate(abs_signal[: len(abs_signal)-chunk]):
+                        r_sum=r_sum+abs_signal[index+chunk]
+                        avg_signal.append(r_sum)
+                        r_sum=r_sum-abs_signal[index]
         
-            for sl in sorted_slices: 
-                sliceStart=sl[2]
-                if sl[0]>uttMean*1.5:
+                    threshold = max(avg_signal)
+                    index=0
+                    while avg_signal[index] < (threshold*.6):
+                        start_sample = index
+                        index=index+1
+
+                    while (avg_signal[index] > (threshold*.2)) and (index<len(avg_signal)-3):
+                        end_sample=index
+                        index=index+1
+
+                    trim_start=start_sample+int(sr*.1)
+                    trim_end=end_sample-int(sr*.1)
+                    selected_signal = selected_signal[trim_start:trim_end]
+                    r_signal_i=r_signal
+                    #fig, ax = plt.subplots(figsize=(20,3))
+                    #plt.title('Signal trimmed')
+                    #ax.plot(selected_signal)
+                    #plt.show()
+
+                slices=[]
+                uttMean = np.mean(np.abs(selected_signal))
+                uttStd = np.std(selected_signal)
+                for sl in range(0, len(selected_signal)-int(sr*1.0), int(sr/10)):
+                    slice=[np.mean(np.abs(selected_signal[sl:sl+int(sr*1.0)])),np.std((selected_signal[sl:sl+int(sr*1.0)])),sl]
+                    #mSlice=np.mean(np.abs(x[sl:sl+sr]))
+                    #sSlice=np.std(np.abs(x[sl:sl+sr]))
+                    slices.append(slice)
+                    #print("slice sl",slice)
+        
+                sorted_slices=sorted(slices, key=lambda slice: slice[1])
+        
+                for sl in sorted_slices: 
                     sliceStart=sl[2]
-                    break
+                    if sl[0]>uttMean*1.5:
+                        sliceStart=sl[2]
+                        break
             
-            sliceEnd=sliceStart + sr
-            selected_signal=selected_signal[sliceStart:sliceEnd]
+                sliceEnd=sliceStart + sr
+                selected_signal=selected_signal[sliceStart:sliceEnd]
   
           
-            if audio_type == 'vowel-i' and too_noisy == False: 
+                if audio_type == 'vowel-i' and too_noisy == False: 
             
-                g_order=2 * int(np.round(sr / 4000))
-                t_order=2 * int(np.round(sr / 2000))+4
-                gl_audio, dg, vt, gf = iaif_ola(selected_signal, Fs=sr, tract_order=t_order, glottal_order=g_order)
-                gl_audio = gl_audio[int(sr*0.1):len(gl_audio)-int(sr*0.1)]
-                selected_signal=selected_signal[int(sr*0.1):len(selected_signal)-int(sr*0.1)]
-                selected_signal = selected_signal / np.linalg.norm(selected_signal)
-                gl_audio = gl_audio / np.linalg.norm(gl_audio)        
-                res=vfo_vocal_fold_estimator(gl_audio,selected_signal,sr,mode_of_processing)
-                r_signal_i=r_signal
-                sr_i=sr
-                selected_signal_i=selected_signal
-                start_i=sliceStart
-                end_i=sliceEnd
+                    g_order=2 * int(np.round(sr / 4000))
+                    t_order=2 * int(np.round(sr / 2000))+4
+                    gl_audio, dg, vt, gf = iaif_ola(selected_signal, Fs=sr, tract_order=t_order, glottal_order=g_order)
+                    gl_audio = gl_audio[int(sr*0.1):len(gl_audio)-int(sr*0.1)]
+                    selected_signal=selected_signal[int(sr*0.1):len(selected_signal)-int(sr*0.1)]
+                    selected_signal = selected_signal / np.linalg.norm(selected_signal)
+                    gl_audio = gl_audio / np.linalg.norm(gl_audio)        
+                    res=vfo_vocal_fold_estimator(gl_audio,selected_signal,sr)
+                    r_signal_i=r_signal
+                    sr_i=sr
+                    selected_signal_i=selected_signal
+                    start_i=sliceStart
+                    end_i=sliceEnd
 
                 
-        #extract pase features 
-        a_signal=selected_signal
-        a_signal = torch.Tensor(a_signal)
-        a_signal = torch.unsqueeze(a_signal, 0)
-        a_signal = torch.unsqueeze(a_signal, 0)
-        #y = pase(a_signal.cuda())
-        y = pase(a_signal.cpu())        
-        feature = y.detach().cpu().numpy()
-        if mode_of_processing==1:
-            print("feature", feature)
+            #extract pase features 
+            a_signal = librosa.resample(selected_signal, sr, 8000)
+            #a_signal=selected_signal
+            a_signal = torch.Tensor(a_signal)
+            a_signal = torch.unsqueeze(a_signal, 0)
+            a_signal = torch.unsqueeze(a_signal, 0)
+            #y = pase(a_signal.cuda())
+            y = pase(a_signal.cpu())        
+            feature = y.detach().cpu().numpy()
+            #print("feature", feature)
             
-        #collect for TestDataset
-        feature_list.append(feature)
-        audio_types.append(audio_type)
+            #collect for TestDataset
+            feature_list.append(feature)
+            audio_types.append(audio_type)
         
     if len(feature_list)>2:
         not_enough_features = False
-    if mode_of_processing==1:
-        print("len(feature_list) =",len(feature_list))
-        print(not_enough_features,too_noisy,no_vowel_i)
     
     
     if not_enough_features == True:
         #not enough features
-        if mode_of_processing==1:
-            print("not enough features")
+        print("not enough features")
         
     elif too_noisy == True:
         #too noisy           
@@ -1416,8 +1430,7 @@ def CWWmain(path, userName, time_code):
         ax5.xaxis.label.set_color(color)
         fname=path+userName+"plot_"+time_code+".png"
         results_name=path+userName+"results_"+time_code+".json"
-        if mode_of_processing==1:        
-            print("fname=",fname,results_name)
+        print("fname=",fname,results_name)
         plt.savefig(fname, bbox_inches='tight',pad_inches = 0.05, transparent=True, edgecolor='none')
         results_file = open(results_name, "w")
         json.dump(res, results_file)
@@ -1425,19 +1438,12 @@ def CWWmain(path, userName, time_code):
         
     elif no_vowel_i == True:
         #no vowel_i
-        if mode_of_processing==1:
-            print("no vowel_i")
+        print("no vowel_i")
     
     else:
         #succeeded
-        if mode_of_processing==1:
-            print("made it 3")
-            print("len(feature_list) =",len(feature_list),"len(audio_types) = ",len(audio_types))
-            print("audio_types = ",audio_types)
         #perform CNN classification
         test_dataset = TestDataset(feature_list, audio_types)
-        if mode_of_processing==1:
-            print('len(test_dataset) = ',len(test_dataset))
         
         class_model = get_model()
         #class_model.cpu() #test
@@ -1448,16 +1454,14 @@ def CWWmain(path, userName, time_code):
         prediction0, true, all_spks, spk_wise, all_features = test_epoch(class_model, test_loader, None, None)
 
         class_model = get_model()
-        class_model.load_state_dict(torch.load('/home/ec2-user/SageMaker/VFO2/version_1/models/trained_pase_model_model1.pth',map_location=torch.device('cpu'))) 
+        class_model.load_state_dict(torch.load('/home/ec2-user/SageMaker/VFO2/version_1/models/trained_pase_model_model0.pth',map_location=torch.device('cpu'))) 
         #if CUDA:
         #    class_model.cuda()
         test_loader = dataloader.DataLoader(test_dataset, shuffle=False, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
         prediction1, true, all_spks, spk_wise, all_features = test_epoch(class_model, test_loader, None, None)
         
         vocalCNN_prediction=np.mean([np.mean(prediction0),np.mean(prediction1)])
-        if mode_of_processing==1:
-            print("vocalCNN_prediction =",vocalCNN_prediction,prediction0,prediction1)
-        
+        print("vocalCNN_prediction =",vocalCNN_prediction,prediction0,prediction1)
         t_max = 500
         vdp_init_t = 0.0
         vdp_init_state = [0.0, 0.1, 0.0, 0.1]  # (xr, dxr, xl, dxl), xl=xr=0
@@ -1538,9 +1542,6 @@ def CWWmain(path, userName, time_code):
         ax5.xaxis.label.set_color(color)
         fname=path+userName+"plot_"+time_code+".png"
         results_name=path+userName+"results_"+time_code+".json"
-        if mode_of_processing==1:
-            print("fname=",fname,results_name)
-            
         plt.savefig(fname, bbox_inches='tight',pad_inches = 0.05, transparent=True, edgecolor='none')
         results_file = open(results_name, "w")
         json.dump(res, results_file)
@@ -1548,14 +1549,9 @@ def CWWmain(path, userName, time_code):
     
     return
     
+
+ 
   
 if __name__ == '__main__':
-    CWWmain('VFO2/sample_store/','02B999B5-543D-5FE6-370E-AC8DC9910DC3/','20210507120341')
-    #path='VFO2/sample_store/'
-    #userName='0320CE73-DA15-8DD8-79EC-FA934F3010DD'
-    #time_code='21071001'
-    #VFO2/VFO2/sample_store/02B999B5-543D-5FE6-370E-AC8DC9910DC3
-    #VFO2/VFO2/sample_store/02B999B5-543D-5FE6-370E-AC8DC9910DC3/VowelA211210193656.mp4
-    #VFO2/VFO2/sample_store/0320CE73-DA15-8DD8-79EC-FA934F3010DE/alphabet-a-z_20201123111210.wav
-    #VFO2/VFO2/sample_store/0320CE73-DA15-8DD8-79EC-FA934F3010DE/count-1-20_20210625162010.wav
-    #VFO2/VFO2/sample_store/02B999B5-543D-5FE6-370E-AC8DC9910DC3/alphabet-a-z_20210507120341.wav
+    CWWmain('/home/ec2-user/SageMaker/VFO2/VFO2/sample_store/493183CB-1934-3BBD-7E38-D058849E5421/VowelAt220124142952.caf',1)
+
