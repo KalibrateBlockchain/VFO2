@@ -56,7 +56,15 @@ from scipy.integrate import ode
 from assimulo.problem import Implicit_Problem
 from assimulo.solvers import IDA
 
-sys.path.append("/home/ec2-user/SageMaker/VFO2/version_1")
+#ROOT_FOLDER_VFO='/home/ec2-user/SageMaker/VFO2/'
+ROOT_FOLDER_VFO='/home/ubuntu/VFO2/'
+
+#ROOT_FOLDER_SAMPLE_STORE='/home/ec2-user/SageMaker/VFO2/VFO2/'
+ROOT_FOLDER_SAMPLE_STORE='/var/www/html/'
+
+
+
+sys.path.append(ROOT_FOLDER_VFO+"version_1")
 from model_paseCNN import * 
 from gen_plot import *
 from pase.models.frontend import wf_builder
@@ -1162,8 +1170,8 @@ def vfo_vocal_fold_estimator(glottal_flow,wav_samples,sample_rate):
     return res
 
 
-def load_model(path='/home/ec2-user/SageMaker/VFO2/version_1/FE_e199.ckpt'):
-    pase = wf_builder('/home/ec2-user/SageMaker/VFO2/version_1/cfg/frontend/PASE+.cfg').eval()
+def load_model(path=ROOT_FOLDER_VFO+'version_1/FE_e199.ckpt'):
+    pase = wf_builder(ROOT_FOLDER_VFO+'version_1/cfg/frontend/PASE+.cfg').eval()
     pase.load_pretrained(path, load_last=True, verbose=True)
     #pase.cuda() #test
     print("pase.cpu")
@@ -1177,7 +1185,7 @@ def CWWmain(fname, mode_of_processing):
     #mode_of_processing=1 # for console
     #mode_of_processing=2 # for production
     
-    path_in_fname='/home/ec2-user/SageMaker/VFO2/VFO2/sample_store/'
+    path_in_fname=ROOT_FOLDER_SAMPLE_STORE+'sample_store/'
     lpf=len(path_in_fname)
     path = fname[:lpf]
     userName = fname[lpf:lpf+37]
@@ -1447,14 +1455,14 @@ def CWWmain(fname, mode_of_processing):
         
         class_model = get_model()
         #class_model.cpu() #test
-        class_model.load_state_dict(torch.load('/home/ec2-user/SageMaker/VFO2/version_1/models/trained_pase_model_model0.pth',map_location=torch.device('cpu'))) 
+        class_model.load_state_dict(torch.load(ROOT_FOLDER_VFO+'version_1/models/trained_pase_model_model0.pth',map_location=torch.device('cpu'))) 
         #if CUDA:
         #    class_model.cuda()
         test_loader = dataloader.DataLoader(test_dataset, shuffle=False, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
         prediction0, true, all_spks, spk_wise, all_features = test_epoch(class_model, test_loader, None, None)
 
         class_model = get_model()
-        class_model.load_state_dict(torch.load('/home/ec2-user/SageMaker/VFO2/version_1/models/trained_pase_model_model0.pth',map_location=torch.device('cpu'))) 
+        class_model.load_state_dict(torch.load(ROOT_FOLDER_VFO+'version_1/models/trained_pase_model_model0.pth',map_location=torch.device('cpu'))) 
         #if CUDA:
         #    class_model.cuda()
         test_loader = dataloader.DataLoader(test_dataset, shuffle=False, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
@@ -1553,5 +1561,5 @@ def CWWmain(fname, mode_of_processing):
  
   
 if __name__ == '__main__':
-    CWWmain('/home/ec2-user/SageMaker/VFO2/VFO2/sample_store/493183CB-1934-3BBD-7E38-D058849E5421/VowelAt220124142952.caf',1)
+    CWWmain(ROOT_FOLDER_SAMPLE_STORE+'sample_store/493183CB-1934-3BBD-7E38-D058849E5421/VowelAt220124142952.caf',1)
 
