@@ -1189,7 +1189,7 @@ def CWWmain(fname, mode_of_processing):
     lpf=len(path_in_fname)
     path = fname[:lpf]
     userName = fname[lpf:lpf+37]
-    time_code=fname[92:104]
+    time_code=fname[lpf+46:lpf+58]
        
     t_code=datetime.datetime.strptime(time_code[:10],"%y%m%d%H%M")
     begin_time_range = datetime.datetime.strftime(t_code + datetime.timedelta(seconds=-30),"%y%m%d%H%M")
